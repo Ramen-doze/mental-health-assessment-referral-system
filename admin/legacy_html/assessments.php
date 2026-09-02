@@ -35,7 +35,7 @@ if ($atable) {
     foreach (['risk_level','risk','risklevel'] as $c) { if (column_exists($conn,$atable,$c)) { $cols['risk']=$c; break; } }
     foreach (['phq_score','phq9_score','phq_total','phq_total_score'] as $c) { if (column_exists($conn,$atable,$c)) { $cols['phq']=$c; break; } }
     foreach (['gad_score','gad7_score','gad_total','gad_total_score'] as $c) { if (column_exists($conn,$atable,$c)) { $cols['gad']=$c; break; } }
-    foreach (['submitted_at','created_at','timestamp','submitted'] as $c) { if (column_exists($conn,$atable,$c)) { $cols['submitted']=$c; break; } }
+    foreach (['submitted_at','created_at','assessment_date','timestamp','submitted'] as $c) { if (column_exists($conn,$atable,$c)) { $cols['submitted']=$c; break; } }
     foreach (['status','review_status','submission_status'] as $c) { if (column_exists($conn,$atable,$c)) { $cols['status']=$c; break; } }
 }
 
@@ -44,39 +44,77 @@ $filter_status = isset($_GET['status']) ? trim($_GET['status']) : '';
 $filter_risk = isset($_GET['risk']) ? trim($_GET['risk']) : '';
 $rows = [];
 if ($atable) {
-    $selectCols = [];
-    $selectCols[] = "`" . mysqli_real_escape_string($conn, $cols['id']) . "`";
-    if ($cols['alias']) $selectCols[] = "`" . mysqli_real_escape_string($conn, $cols['alias']) . "`";
-    if ($cols['risk']) $selectCols[] = "`" . mysqli_real_escape_string($conn, $cols['risk']) . "`";
-    if ($cols['phq']) $selectCols[] = "`" . mysqli_real_escape_string($conn, $cols['phq']) . "`";
-    if ($cols['gad']) $selectCols[] = "`" . mysqli_real_escape_string($conn, $cols['gad']) . "`";
-    if ($cols['submitted']) $selectCols[] = "`" . mysqli_real_escape_string($conn, $cols['submitted']) . "`";
-    if ($cols['status']) $selectCols[] = "`" . mysqli_real_escape_string($conn, $cols['status']) . "`";
+    if ($atable === 'assessment_data') {
+        $sql = "SELECT a.assessment_id AS assessment_id,
+                       COALESCE(u.fullname, CONCAT('User ', a.user_id)) AS student_name,
+                       a.risk_level,
+                       a.phq9_score,
+                       a.gad7_score,
+                       a.status,
+                       a.assessment_date
+                FROM assessment_data a
+                LEFT JOIN user_data u ON u.user_id = a.user_id";
 
-    $sql = "SELECT " . implode(',', $selectCols) . " FROM `$atable`";
-    $where = [];
-    if ($search) {
-        $s = mysqli_real_escape_string($conn, $search);
-        $clauses = [];
-        if ($cols['alias']) $clauses[] = "`" . mysqli_real_escape_string($conn, $cols['alias']) . "` LIKE '%$s%'";
-        if ($cols['id']) $clauses[] = "`" . mysqli_real_escape_string($conn, $cols['id']) . "` LIKE '%$s%'";
-        if ($cols['phq']) $clauses[] = "`" . mysqli_real_escape_string($conn, $cols['phq']) . "` LIKE '%$s%'";
-        $where[] = '(' . implode(' OR ', $clauses) . ')';
-    }
-    if ($filter_status && $cols['status']) {
-        $fs = mysqli_real_escape_string($conn, $filter_status);
-        $where[] = "`" . mysqli_real_escape_string($conn, $cols['status']) . "` = '$fs'";
-    }
-    if ($filter_risk && $cols['risk']) {
-        $fr = mysqli_real_escape_string($conn, $filter_risk);
-        $where[] = "`" . mysqli_real_escape_string($conn, $cols['risk']) . "` = '$fr'";
-    }
-    if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
-    $sql .= ' ORDER BY ' . ($cols['submitted'] ? "`" . mysqli_real_escape_string($conn, $cols['submitted']) . "` DESC" : "`" . mysqli_real_escape_string($conn, $cols['id']) . "` DESC");
+        $where = [];
+        if ($search) {
+            $s = mysqli_real_escape_string($conn, $search);
+            $where[] = "(
+                u.fullname LIKE '%$s%' OR
+                a.assessment_id LIKE '%$s%' OR
+                a.phq9_score LIKE '%$s%' OR
+                a.gad7_score LIKE '%$s%'
+            )";
+        }
+        if ($filter_status) {
+            $fs = mysqli_real_escape_string($conn, $filter_status);
+            $where[] = "a.status = '$fs'";
+        }
+        if ($filter_risk) {
+            $fr = mysqli_real_escape_string($conn, $filter_risk);
+            $where[] = "a.risk_level = '$fr'";
+        }
+        if ($where) { $sql .= ' WHERE ' . implode(' AND ', $where); }
+        $sql .= ' ORDER BY a.assessment_date DESC, a.assessment_id DESC';
 
-    $res = run_query($conn, $sql);
-    if ($res) {
-        while ($r = mysqli_fetch_assoc($res)) $rows[] = $r;
+        $res = run_query($conn, $sql);
+        if ($res) {
+            while ($r = mysqli_fetch_assoc($res)) $rows[] = $r;
+        }
+    } else {
+        $selectCols = [];
+        $selectCols[] = "`" . mysqli_real_escape_string($conn, $cols['id']) . "`";
+        if ($cols['alias']) $selectCols[] = "`" . mysqli_real_escape_string($conn, $cols['alias']) . "`";
+        if ($cols['risk']) $selectCols[] = "`" . mysqli_real_escape_string($conn, $cols['risk']) . "`";
+        if ($cols['phq']) $selectCols[] = "`" . mysqli_real_escape_string($conn, $cols['phq']) . "`";
+        if ($cols['gad']) $selectCols[] = "`" . mysqli_real_escape_string($conn, $cols['gad']) . "`";
+        if ($cols['submitted']) $selectCols[] = "`" . mysqli_real_escape_string($conn, $cols['submitted']) . "`";
+        if ($cols['status']) $selectCols[] = "`" . mysqli_real_escape_string($conn, $cols['status']) . "`";
+
+        $sql = "SELECT " . implode(',', $selectCols) . " FROM `$atable`";
+        $where = [];
+        if ($search) {
+            $s = mysqli_real_escape_string($conn, $search);
+            $clauses = [];
+            if ($cols['alias']) $clauses[] = "`" . mysqli_real_escape_string($conn, $cols['alias']) . "` LIKE '%$s%'";
+            if ($cols['id']) $clauses[] = "`" . mysqli_real_escape_string($conn, $cols['id']) . "` LIKE '%$s%'";
+            if ($cols['phq']) $clauses[] = "`" . mysqli_real_escape_string($conn, $cols['phq']) . "` LIKE '%$s%'";
+            $where[] = '(' . implode(' OR ', $clauses) . ')';
+        }
+        if ($filter_status && $cols['status']) {
+            $fs = mysqli_real_escape_string($conn, $filter_status);
+            $where[] = "`" . mysqli_real_escape_string($conn, $cols['status']) . "` = '$fs'";
+        }
+        if ($filter_risk && $cols['risk']) {
+            $fr = mysqli_real_escape_string($conn, $filter_risk);
+            $where[] = "`" . mysqli_real_escape_string($conn, $cols['risk']) . "` = '$fr'";
+        }
+        if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
+        $sql .= ' ORDER BY ' . ($cols['submitted'] ? "`" . mysqli_real_escape_string($conn, $cols['submitted']) . "` DESC" : "`" . mysqli_real_escape_string($conn, $cols['id']) . "` DESC");
+
+        $res = run_query($conn, $sql);
+        if ($res) {
+            while ($r = mysqli_fetch_assoc($res)) $rows[] = $r;
+        }
     }
 }
 ?>
@@ -151,6 +189,7 @@ if ($atable) {
                 <option value="">All</option>
                 <option value="Pending" <?= $filter_status === 'Pending' ? 'selected' : '' ?>>Pending</option>
                 <option value="Reviewed" <?= $filter_status === 'Reviewed' ? 'selected' : '' ?>>Reviewed</option>
+                <option value="Monitoring" <?= $filter_status === 'Monitoring' ? 'selected' : '' ?>>Monitoring</option>
                 <option value="Referred" <?= $filter_status === 'Referred' ? 'selected' : '' ?>>Referred</option>
               </select>
 
@@ -158,6 +197,7 @@ if ($atable) {
               <select id="risk" name="risk">
                 <option value="">All</option>
                 <option value="High" <?= $filter_risk === 'High' ? 'selected' : '' ?>>High</option>
+                <option value="Moderate" <?= $filter_risk === 'Moderate' ? 'selected' : '' ?>>Moderate</option>
                 <option value="Medium" <?= $filter_risk === 'Medium' ? 'selected' : '' ?>>Medium</option>
                 <option value="Low" <?= $filter_risk === 'Low' ? 'selected' : '' ?>>Low</option>
               </select>
@@ -176,20 +216,23 @@ if ($atable) {
                   <th>GAD-7</th>
                   <th>Status</th>
                   <th>Submitted</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 <?php if (empty($rows)): ?>
-                  <tr><td colspan="6" class="muted">No assessments found.</td></tr>
+                  <tr><td colspan="7" class="muted">No assessments found.</td></tr>
                 <?php else: ?>
                   <?php foreach ($rows as $r): ?>
+                    <?php $record_id = $r['assessment_id'] ?? $r[$cols['id']] ?? $r['id'] ?? 0; ?>
                     <tr>
-                      <td><?= htmlspecialchars($r[$cols['alias']] ?? ($r['student_alias'] ?? $r['alias'] ?? $r['student_id'] ?? $r[$cols['id']] ?? '')) ?></td>
-                      <td><?= htmlspecialchars($r[$cols['risk']] ?? ($r['risk_level'] ?? $r['risk'] ?? '')) ?></td>
-                      <td><?= htmlspecialchars($r[$cols['phq']] ?? ($r['phq_score'] ?? $r['phq9_score'] ?? '')) ?></td>
-                      <td><?= htmlspecialchars($r[$cols['gad']] ?? ($r['gad_score'] ?? $r['gad7_score'] ?? '')) ?></td>
-                      <td><?= htmlspecialchars($r[$cols['status']] ?? ($r['status'] ?? $r['review_status'] ?? '')) ?></td>
-                      <td><?= htmlspecialchars($r[$cols['submitted']] ?? ($r['submitted_at'] ?? $r['created_at'] ?? '')) ?></td>
+                      <td><?= htmlspecialchars($r['student_name'] ?? $r[$cols['alias']] ?? ($r['student_alias'] ?? $r['alias'] ?? $r['student_id'] ?? $r[$cols['id']] ?? '')) ?></td>
+                      <td><?= htmlspecialchars($r['risk_level'] ?? $r[$cols['risk']] ?? ($r['risk_level'] ?? $r['risk'] ?? '')) ?></td>
+                      <td><?= htmlspecialchars($r['phq9_score'] ?? $r[$cols['phq']] ?? ($r['phq_score'] ?? $r['phq9_score'] ?? '')) ?></td>
+                      <td><?= htmlspecialchars($r['gad7_score'] ?? $r[$cols['gad']] ?? ($r['gad_score'] ?? $r['gad7_score'] ?? '')) ?></td>
+                      <td><?= htmlspecialchars($r['status'] ?? $r[$cols['status']] ?? ($r['status'] ?? $r['review_status'] ?? '')) ?></td>
+                      <td><?= htmlspecialchars($r['assessment_date'] ?? $r[$cols['submitted']] ?? ($r['submitted_at'] ?? $r['created_at'] ?? '')) ?></td>
+                      <td><a href="assessment_view.php?id=<?= urlencode((string)$record_id) ?>">View</a></td>
                     </tr>
                   <?php endforeach; ?>
                 <?php endif; ?>

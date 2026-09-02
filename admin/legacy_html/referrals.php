@@ -28,7 +28,7 @@ foreach ($assessment_candidates as $c) { if (table_exists($conn, $c)) { $atable 
 
 $counselors = [];
 if (table_exists($conn, 'user_data')) {
-    $cres = mysqli_query($conn, "SELECT user_id, fullname FROM user_data WHERE role_type = 'counselor' AND status = 'Active' ORDER BY fullname ASC");
+    $cres = mysqli_query($conn, "SELECT user_id, fullname FROM user_data WHERE role_type = 'counselor' AND status = 'active' ORDER BY fullname ASC");
     if ($cres) while ($r = mysqli_fetch_assoc($cres)) $counselors[] = $r;
 }
 
